@@ -4,7 +4,8 @@
 # The default parameters which can be given to the script as well
 param(
     [string] $dns1 = "1.1.1.1",
-    [string] $dns2 = "1.0.0.1"
+    [string] $dns2 = "1.0.0.1",
+    [bool] $dhcpreset = $false
 );
 
 # Default error message. Will be overwritten when an action was performed on the network interfaces
@@ -22,9 +23,7 @@ function Set-DnsServerForNetworkInterface([System.Object] $interfaceIndex, [stri
 
     # Check if dhcp is activated
     if ($currentDnsServers.ServerAddresses -eq $dnsSrvIp1 -And $currentDnsServers.ServerAddresses -eq $dnsSrvIp2) {
-        # If not change back to dhcp configuration
-        Set-DnsClientServerAddress -InterfaceIndex $interfaceIndex -ResetServerAddresses
-        $resultMsg = [string]::format("Switched DNS config on device {0} to DHCP mode.", $currentDevice.InterfaceDescription);
+        $resultMsg = [string]::format("Configuration already applied. No changes made for adapter {0}.", $currentDevice.InterfaceDescription);
     }
     else {
         # If so, change to static DNS configuration using 1.1.1.1
@@ -37,9 +36,26 @@ function Set-DnsServerForNetworkInterface([System.Object] $interfaceIndex, [stri
     return $resultMsg;
 }
 
+function Set-DnsToDhcp([int16] $interfaceIndex, [string] $resultMsg) {
+    $currentDevice = Get-NetAdapter -InterfaceIndex $interfaceIndex;
+
+    # Change back to dhcp configuration
+    Set-DnsClientServerAddress -InterfaceIndex $interfaceIndex -ResetServerAddresses
+    $resultMsg = [string]::format("Switched DNS config on device {0} to DHCP mode.", $currentDevice.InterfaceDescription);
+
+    return $resultMsg;
+}
+
 # Get all the physical network interfaces currently connected and run the function for each of them
-$resultMessageAccum = Get-NetAdapter -physical |
-    Where-Object status -eq 'up' |
-    ForEach-Object { Set-DnsServerForNetworkInterface $_.InterfaceIndex $dns1 $dns2 $resultDesc};
+if ($dhcpreset -eq $true) {
+    $resultMessageAccum = Get-NetAdapter -physical |
+        Where-Object status -eq 'up' |
+        ForEach-Object { Set-DnsToDhcp $_.InterfaceIndex $resultDesc};
+}
+else {
+    $resultMessageAccum = Get-NetAdapter -physical |
+        Where-Object status -eq 'up' |
+        ForEach-Object { Set-DnsServerForNetworkInterface $_.InterfaceIndex $dns1 $dns2 $resultDesc};
+}
 
 Write-Output($resultMessageAccum);
